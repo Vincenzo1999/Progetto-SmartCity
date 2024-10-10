@@ -1,0 +1,40 @@
+version: '3'
+services:
+  amqp-broker:
+    image: rabbitmq 
+    container_name: amqp-broker
+    ports:
+      - 5672:5672
+      - 9001:9001
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    networks:
+      - amqp-network
+    
+    
+
+  base_station:
+    build: 
+      context: ./
+      dockerfile: Dockerfile.base_station                                          
+    container_name: amqp-bs
+    depends_on:
+      - amqp-broker
+    networks:
+      - amqp-network
+    
+
+  veicolo:
+    build: 
+      context: ./
+      dockerfile: Dockerfile.veicolo
+    container_name: amqp-veicolo
+    depends_on:
+      - amqp-broker
+    networks:
+      - amqp-network
+   
+
+networks:
+  amqp-network:
+    driver: bridge

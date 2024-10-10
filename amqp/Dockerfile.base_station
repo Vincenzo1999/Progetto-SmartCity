@@ -1,0 +1,11 @@
+FROM python:3.10
+
+# Copiamo il nostro codice Python nel contenitore
+WORKDIR /app
+COPY . .
+RUN pip install --upgrade pip
+RUN pip3 install -r requirements.txt
+
+
+# Eseguiamo il nostro script Python quando il contenitore viene avviato
+CMD ["python", "-u", "base_station.py"]

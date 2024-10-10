@@ -1,0 +1,14 @@
+# Utilizziamo Python 3.9 come base
+FROM python:3.10
+
+# Copiamo il nostro codice Python nel contenitore
+WORKDIR /app
+COPY . .
+
+# Installiamo le dipendenze
+RUN pip install --upgrade pip
+RUN pip3 install -r requirements.txt
+
+
+# Eseguiamo il nostro script Python quando il contenitore viene avviato
+CMD ["python", "-u","veicolo.py"]

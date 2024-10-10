@@ -1,0 +1,40 @@
+version: '3'
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto
+    container_name: mqtt-broker
+    ports:
+      - 1883:1883
+      - 9001:9001
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    networks:
+      - mqtt-network
+    
+    
+
+  base_station:
+    build: 
+      context: ./
+      dockerfile: Dockerfile.base_station                                          
+    container_name: mqtt-bs
+    depends_on:
+      - mqtt-broker
+    networks:
+      - mqtt-network
+    
+
+  veicolo:
+    build: 
+      context: ./
+      dockerfile: Dockerfile.veicolo
+    container_name: mqtt-veicolo
+    depends_on:
+      - mqtt-broker
+    networks:
+      - mqtt-network
+   
+
+networks:
+  mqtt-network:
+    driver: bridge
