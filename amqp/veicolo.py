@@ -1,24 +1,44 @@
 import random
 import time
-from paho.mqtt import client as mqtt_client
+import pika
 from geolib import geohash
 
-topics_veicolo = { 'posizione' : 'veicolo/posizione', 
-            'velocità' : 'veicolo/velocità'  }
-topics_bs = { 'posizione' : 'bs/posizione', 
-          'traffico' : 'bs/traffico',
-            'segnale' : 'bs/signal'  }
+topics_veicolo = { 'posizione' : 'veicolo.posizione', 
+            'velocità' : 'veicolo.velocità'  }
+topics_bs = { 'posizione' : 'bs.posizione', 
+          'traffico' : 'bs.traffico',
+            'segnale' : 'bs.signal'  }
 veicolo_id = f"veicolo {random.randint(0,100)}"
-broker = "mqtt-broker"
-port = 1883
+broker = "amqp-broker"
+port = 5672
 
 latitudine_max = 38.1194325
 latitudine_min = 38.109894
 longitudine_max = 15.6574058
 longitudine_min = 15.6439948
 
+time.sleep(5)
+connection = pika.BlockingConnection(
+    pika.ConnectionParameters(host = broker))
+channel = connection.channel()
 
+channel.exchange_declare(exchange='topic', exchange_type='topic')
 
+result = channel.queue_declare(queue=topics_bs['posizione'], exclusive=True)
+queue_name = result.method.queue
+
+channel.queue_bind(exchange='topic', queue=topics_bs['posizione'])
+
+print(' [*] Waiting for logs. To exit press CTRL+C')
+
+def callback(ch, method, properties, body):
+    print(f" [x] {body}")
+
+channel.basic_consume(
+    queue=queue_name, on_message_callback=callback, auto_ack=True)
+
+channel.start_consuming()
+"""
 
 def on_connect(client, userdata, connect_flags, reason_code, properties):
     if reason_code == 0:
@@ -78,3 +98,4 @@ def run():
 
 if __name__ == '__main__':
     run()
+"""

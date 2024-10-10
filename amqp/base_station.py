@@ -1,14 +1,14 @@
-from paho.mqtt import client as mqtt_client
+import pika
 import random
 import time
 import requests
 from geolib import geohash
 
-topics_veicolo = { 'posizione' : 'veicolo/posizione', 
-            'velocità' : 'veicolo/velocità'  }
-topics_bs = { 'posizione' : 'bs/posizione', 
-          'traffico' : 'bs/traffico',
-            'segnale' : 'bs/signal'  }
+topics_veicolo = { 'posizione' : 'veicolo.posizione', 
+            'velocità' : 'veicolo.velocità'  }
+topics_bs = { 'posizione' : 'bs.posizione', 
+          'traffico' : 'bs.traffico',
+            'segnale' : 'bs.signal'  }
 
 api = "pk.3f5c5de68b06b081a2e814e3b186f773"
 latitudine_max = 38.1194325
@@ -17,8 +17,8 @@ longitudine_max = 15.6574058
 longitudine_min = 15.6439948
 URL = f"http://www.opencellid.org/cell/getInArea?key={api}&BBOX={latitudine_min},{longitudine_min},{latitudine_max},{longitudine_max}&format=json"
 
-broker = "mqtt-broker"
-port = 1883
+broker = "amqp-broker"
+port = 5672
 
     # Effettua la richiesta
 response = requests.get(URL)
@@ -63,7 +63,26 @@ else:
 base_station_id = f"bs {cellid}"
 position_bs = geohash.encode (latitudine,longitudine,7)
 
+time.sleep(5)
+connection = pika.BlockingConnection(
+    pika.ConnectionParameters(host= broker))
+channel = connection.channel()
 
+channel.exchange_declare(exchange= 'topic', exchange_type="topic")
+timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+traffic = {"tmstp" : timestamp, "e": [{ "n" : "3432/0/1" , "v" : f"{random.choice("low", "high")}" }] } # 0 low 1 medium 2 high
+signal = {"tmstp" : timestamp, "e": [ { "n" : "4/0/2" , "v" : f"{random.randint(-120, -50)} " }] } 
+
+channel.basic_publish(exchange='topic', routing_key = topics_bs["posizione"], body=position_bs)
+print (f"Messaggio {position_bs} inviato!")
+channel.basic_publish(exchange='topic', routing_key = topics_bs["traffico"], body=traffic)
+print (f"Messaggio {traffic} inviato!")
+channel.basic_publish(exchange='topic', routing_key = topics_bs["segnale"], body=signal)
+print (f"Messaggio {signal} inviato!")
+
+connection.close()
+
+"""
 def on_connect(client, userdata, connect_flags, reason_code, properties):
     if reason_code == 0:
         print("Connected to MQTT Broker!")
@@ -118,3 +137,4 @@ if __name__ == '__main__':
     
       run()
 
+"""

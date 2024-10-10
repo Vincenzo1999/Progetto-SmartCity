@@ -1,13 +1,13 @@
 version: '3'
 services:
   amqp-broker:
-    image: rabbitmq 
+    image: rabbitmq
     container_name: amqp-broker
     ports:
       - 5672:5672
-      - 9001:9001
+      
     volumes:
-      - ./mosquitto/config:/mosquitto/config
+      - ./rabbitmq/config:/rabbitmq/config
     networks:
       - amqp-network
     
