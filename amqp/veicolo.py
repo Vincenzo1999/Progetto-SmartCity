@@ -17,29 +17,43 @@ latitudine_min = 38.109894
 longitudine_max = 15.6574058
 longitudine_min = 15.6439948
 
-time.sleep(5)
-connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host = broker))
-channel = connection.channel()
+def on_message(channel, method_frame, header_frame, body):
+     print(f"Ricevuto il messaggio con body {body.decode()} dal topic {topic}")
 
+time.sleep(5)
+
+credentials = pika.PlainCredentials("guest", 'guest')
+connection = pika.BlockingConnection(
+    pika.ConnectionParameters(host = broker,port=port,credentials=credentials))
+channel = connection.channel()
 channel.exchange_declare(exchange='topic', exchange_type='topic')
 
-channel.queue_declare(queue=topics_bs['posizione'], exclusive=True)
-channel.queue_declare(queue=topics_bs['traffico'], exclusive=True)
-channel.queue_declare(queue=topics_bs['segnale'], exclusive=True)
+for topic in topics_bs.values():
+ channel.queue_declare(queue=topic, exclusive=True)
+ channel.queue_bind(exchange='topic', queue=topic)
+ channel.basic_consume(topic, on_message_callback= on_message)
 
-channel.queue_bind(exchange='topic', queue=topics_bs['posizione'])
-channel.queue_bind(exchange='topic', queue=topics_bs['traffico'])
-channel.queue_bind(exchange='topic', queue=topics_bs['segnale'])
+ print(f"Sottoscritto al topic {topic}")  
 
-print(' [*] Waiting for logs. To exit press CTRL+C')
-
-def callback(ch, method, properties, body):
-    print(f" [x] {body}")
-
-channel.basic_consume(topics_bs['posizione'])
-channel.basic_consume(topics_bs['traffico'])
-channel.basic_consume(topics_bs['segnale'])
+#channel.start_consuming()
+try:
+   while True: 
+      latitudine = random.uniform(latitudine_min,latitudine_max)
+      longitudine = random.uniform(longitudine_min,longitudine_max)
+      position_veicolo = geohash.encode (latitudine,longitudine,7)
+      timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+      speed = {"tmstp" : timestamp, "e": [{ "n" : "3430/0/4" , "v" : f"{random.randint(0, 60)}" }] }
     
-
-channel.start_consuming()
+      messages = {
+        topics_veicolo['posizione']: f"Posizione: {position_veicolo}",  # Valore dinamico
+        topics_veicolo['velocità']: f"Velocità: {speed} km/h"  # Valore dinamico
+    }
+    
+      for topic, message in messages.items():
+         channel.basic_publish(exchange='topic', routing_key=topic, body=message)
+         print(f"Messaggio {message} inviato!")
+      time.sleep(10)
+      channel.connection.process_data_events()
+except KeyboardInterrupt:
+   connection.close()
+   

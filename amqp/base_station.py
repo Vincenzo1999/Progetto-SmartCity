@@ -64,39 +64,54 @@ else:
 base_station_id = f"bs {cellid}"
 position_bs = geohash.encode(latitudine, longitudine, 7)
 
+def on_message(channel, method_frame, header_frame, body):
+     print(f"Ricevuto il messaggio con body {body.decode()} dal topic {topic}")
+
 time.sleep(5)
 
-# Imposta i parametri di connessione con RabbitMQ
-connection_params = pika.ConnectionParameters(host=broker, port=port)
+credentials = pika.PlainCredentials("guest", 'guest')
+connection_params = pika.ConnectionParameters(host=broker, port=port,credentials=credentials)
 connection = pika.BlockingConnection(connection_params)
 channel = connection.channel()
 
-# Dichiarare un exchange di tipo topic
+
 channel.exchange_declare(exchange='topic', exchange_type='topic')
+for topic in topics_veicolo.values():
+ channel.queue_declare(queue=topic, exclusive=True)
+ channel.queue_bind(exchange='topic', queue=topic)
+ channel.basic_consume(topic, on_message_callback= on_message)
 
-# Genera un timestamp
-timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+ print(f"Sottoscritto al topic {topic}")  
 
-# Messaggi da pubblicare
-traffic = {
+
+try:
+    while True:
+
+     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+
+     traffic = {
     "tmstp": timestamp, 
     "e": [{ "n": "3432/0/1", "v": random.choice(["low","medium","high"]) }]
 }
 
-signal = {
+     signal = {
     "tmstp": timestamp, 
     "e": [{ "n": "4/0/2", "v": str(random.randint(-120, -50)) }]
 }
-
+     messages = {
+        topics_bs['posizione']: f"Posizione: {position_bs}",  # Valore dinamico
+        topics_bs['traffico']: f"Traffico: {traffic} veicoli",  # Valore dinamico
+        topics_bs['segnale']: f"Segnale: {signal} dBm"  # Valore dinamico
+}
 # Pubblicare i messaggi
-channel.basic_publish(exchange='topic', routing_key=topics_bs["posizione"], body=position_bs)
-print(f"Messaggio {position_bs} inviato!")
+     for topic,message in messages.items():
+      channel.basic_publish(exchange='topic', routing_key=topic, body=message)
+      print(f"Messaggio {message} inviato!")
+     time.sleep(10)
+     channel.connection.process_data_events()
+except KeyboardInterrupt:
+ connection.close()
+   
 
-channel.basic_publish(exchange='topic', routing_key=topics_bs["traffico"], body=str(traffic))
-print(f"Messaggio {traffic} inviato!")
-
-channel.basic_publish(exchange='topic', routing_key=topics_bs["segnale"], body=str(signal))
-print(f"Messaggio {signal} inviato!")
-
-# Chiudere la connessione
-connection.close()
+ 
