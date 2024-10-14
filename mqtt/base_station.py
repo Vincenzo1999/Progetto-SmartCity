@@ -4,11 +4,7 @@ import time
 import requests
 from geolib import geohash
 
-topics_veicolo = { 'posizione' : 'veicolo/posizione', 
-            'velocità' : 'veicolo/velocità'  }
-topics_bs = { 'posizione' : 'bs/posizione', 
-          'traffico' : 'bs/traffico',
-            'segnale' : 'bs/signal'  }
+
 
 api = "pk.3f5c5de68b06b081a2e814e3b186f773"
 latitudine_max = 38.1194325
@@ -63,6 +59,11 @@ else:
 base_station_id = f"bs {cellid}"
 position_bs = geohash.encode (latitudine,longitudine,7)
 
+topics_veicolo = { 'posizione' : f'{veicolo_id}/3430/0/', 
+            'velocità' : 'veicolo/velocità'  }
+topics_bs = { 'posizione' : 'bs/posizione', 
+          'traffico' : 'bs/traffico',
+            'segnale' : 'bs/signal'  }
 
 def on_connect(client, userdata, connect_flags, reason_code, properties):
     if reason_code == 0:
@@ -80,7 +81,7 @@ def on_message(client, userdata, message):
 def publish(client):
     # Generazione dinamica dei valori dei messaggi
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    traffic = {"tmstp" : timestamp, "e": [{ "n" : "3432/0/1" , "v" : f"{random.randint(0, 2)}" }] } # 0 low 1 medium 2 high
+    traffic = {"tmstp" : timestamp, "e": [{ "n" : "3432/0/1" , "v" : f"{random.randint(0, 200)}" }] } # 0 low 1 medium 2 high
     signal = {"tmstp" : timestamp, "e": [ { "n" : "4/0/2" , "v" : f"{random.randint(-120, -50)} " }] } 
     messages = {
         topics_bs['posizione']: f"Posizione: {position_bs}",  # Valore dinamico

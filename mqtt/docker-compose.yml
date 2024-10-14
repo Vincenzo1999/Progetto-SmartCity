@@ -22,6 +22,16 @@ services:
       - mqtt-broker
     networks:
       - mqtt-network
+
+  base_station2:
+    build: 
+     context: ./
+     dockerfile: Dockerfile.base_station                                          
+    container_name: mqtt-bs2
+    depends_on:
+     - mqtt-broker
+    networks:
+     - mqtt-network
     
 
   veicolo:
