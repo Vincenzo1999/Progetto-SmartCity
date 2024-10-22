@@ -1,57 +1,50 @@
-import requests
+import traci
 import random
+import sumolib
+import subprocess
 
-# API e informazioni sulla bounding box
-api = "pk.3f5c5de68b06b081a2e814e3b186f773"
-latitudine_max = 38.1194325
-latitudine_min = 38.109894
-longitudine_max = 15.6574058
-longitudine_min = 15.6439948
-URL = f"http://www.opencellid.org/cell/getInArea?key={api}&BBOX={latitudine_min},{longitudine_min},{latitudine_max},{longitudine_max}&format=json"
+# Percorso al file di configurazione SUMO
+path = "/home/vincenzo/simulazione _osm/simulazione.sumocfg"
+traci.start(["sumo-gui", "-c", path, "--step-length", "1"])
 
-try:
-    # Effettua la richiesta
-    response = requests.get(URL)
+# Leggi la rete
+#net = sumolib.net.readNet("/home/vincenzo/Sumo/2024-10-17-17-04-06/osm.net.xml")
 
-    # Controlla se la richiesta è andata a buon fine
-    if response.status_code == 200:
-        # Converti la risposta in formato JSON
-        messaggio_json = response.json()
 
-        # Inizializza un array per memorizzare i dati delle celle
-        cell_data_array = []
 
-        # Estrai e memorizza 'cellid' e le coordinate in un array
-        for cell in messaggio_json.get("cells", []):
-            cellid = cell.get("cellid")
-            lat = cell.get("lat")
-            lon = cell.get("lon")
+while traci.simulation.getMinExpectedNumber() > 0:
+  traci.simulationStep()
+# Ottieni la lista delle corsie e crea una lista degli edge per i veicoli passeggeri
+  lane_list = traci.lane.getIDList()
+  edge_list = []
 
-            if cellid is not None and lat is not None and lon is not None:
-                cell_data_array.append({
-                    "cellid": cellid,
-                    "lat": lat, 
-                    "lon": lon
-                    })
+  for lane in lane_list:
+    
+    allowed_vehicles = traci.lane.getAllowed(lane)
+    if 'passenger' in allowed_vehicles:
+        edge = traci.lane.getEdgeID(lane)
+        edge_list.append(edge)
 
-        # Se ci sono celle disponibili, scegli una cella casuale e stampa le informazioni
-        if cell_data_array:
-            cella = random.choice(cell_data_array)  # Seleziona una cella casuale
-            cellid = cella["cellid"]
-            latitudine = cella["lat"]
-            longitudine = cella ["lon"]
+# Seleziona casualmente un edge di partenza e uno di arrivo
+  start_edge = random.choice(edge_list)
+  end_edge = random.choice(edge_list)
 
-            # Stampa il cellid e le coordinate della cella scelta
-            print(cell_data_array)
-            print(f"Cella Casuale: CellID = {cellid}, Coordinate = {latitudine} {longitudine}")
-        else:
-            print("Nessuna cella trovata nell'area specificata.")
+# Esegui findAllRoutes.py per ottenere la rotta
+  cmd = ["python3", "findAllRoutes.py", "-n", path, "-s", start_edge, "-t", end_edge]
+  result = subprocess.run(cmd, capture_output=True, text=True)
 
-    else:
-        # Gestione di errori in caso di risposta non corretta
-        print(f"Errore: {response.status_code}")
-        print("Dettagli:", response.text)
+# Stampa l'output del comando
+  print("Output di findAllRoutes.py:", result.stdout)
+    # Ottieni la lista dei veicoli nella simulazione
+  veicoli = traci.vehicle.getIDList()
 
-except requests.exceptions.RequestException as e:
-    # Gestione degli errori di connessione o timeout
-    print(f"Errore di connessione: {e}")
+  if veicoli:  # Verifica se ci sono veicoli nella simulazione
+        # Seleziona casualmente un veicolo
+        veicolo = random.choice(veicoli)
+        
+        # Verifica l'output di findAllRoutes.py e imposta la nuova rotta
+        new_route = result.stdout.strip().split("\n")
+        if new_route and new_route[0] != "":
+            traci.vehicle.setRoute(veicolo, new_route)
+
+traci.close()

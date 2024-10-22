@@ -1,0 +1,42 @@
+import traci
+import random
+import sumolib
+
+# Percorso al file di configurazione SUMO
+path = "/home/vincenzo/Sumo/2024-10-17-17-04-06/osm.sumocfg"
+traci.start(["sumo", "-c", path,]) 
+net = sumolib.net.readNet("/home/vincenzo/Sumo/2024-10-17-17-04-06/osm.net.xml")
+
+def get_random_accessible_edge(current_edge):
+    connected_edges = net.getEdge(current_edge).getOutgoing()  # Ottiene le edge collegate a quella corrente
+    
+    if connected_edges:  # Controlla se ci sono edge collegate
+        return random.choice(connected_edges).getID()  # Scegli un edge collegato
+    else:
+        print(f"Nessun edge collegato trovato per l'edge: {current_edge}")
+        return None  # Restituisci None se non ci sono edge collegati
+
+step = 1
+while step < 10000:
+    traci.simulationStep()
+    vehicle_id = random.choice(traci.vehicle.getIDList())
+    route = traci.vehicle.getRoute(vehicle_id)
+    
+    # La prima e l'ultima strada della rotta rappresentano la partenza e l'arrivo
+    start_edge = route[0] if len(route) > 0 else None
+    end_edge = route[-1] if len(route) > 0 else None
+
+    if end_edge:  # Controlla che end_edge non sia None
+        if traci.vehicle.getRouteID(vehicle_id) == end_edge:
+            new_edge = get_random_accessible_edge(end_edge)
+            if new_edge:  # Controlla che new_edge non sia None
+                traci.vehicle.changeTarget(vehicle_id, new_edge)
+                print(f"Veicolo cambiato target a: {new_edge}")
+            else:
+                print("Non è stato possibile trovare un nuovo edge.")
+    
+    step += 1
+print(start_edge,end_edge)
+# Chiudi TraCI
+traci.close()
+

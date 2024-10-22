@@ -59,7 +59,7 @@ else:
 base_station_id = f"bs {cellid}"
 position_bs = geohash.encode (latitudine,longitudine,7)
 
-topics_veicolo = { 'posizione' : f'{veicolo_id}/3430/0/', 
+topics_veicolo = { 'posizione' : '',#f'{veicolo_id}/3430/0/', 
             'velocità' : 'veicolo/velocità'  }
 topics_bs = { 'posizione' : 'bs/posizione', 
           'traffico' : 'bs/traffico',
