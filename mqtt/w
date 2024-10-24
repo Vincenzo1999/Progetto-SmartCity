@@ -1,42 +1,58 @@
 import traci
-import random
 import sumolib
+import random
+import time
+from traci.exceptions import TraCIException
 
 # Percorso al file di configurazione SUMO
-path = "/home/vincenzo/Sumo/2024-10-17-17-04-06/osm.sumocfg"
-traci.start(["sumo", "-c", path,]) 
-net = sumolib.net.readNet("/home/vincenzo/Sumo/2024-10-17-17-04-06/osm.net.xml")
+path = "/home/vincenzo/simulazione _osm/simulazione.sumocfg"
 
-def get_random_accessible_edge(current_edge):
-    connected_edges = net.getEdge(current_edge).getOutgoing()  # Ottiene le edge collegate a quella corrente
-    
-    if connected_edges:  # Controlla se ci sono edge collegate
-        return random.choice(connected_edges).getID()  # Scegli un edge collegato
-    else:
-        print(f"Nessun edge collegato trovato per l'edge: {current_edge}")
-        return None  # Restituisci None se non ci sono edge collegati
+# Avvia la simulazione
+traci.start(["sumo-gui", "-c", path])
+step = 0
+vehicle_routes = {}
+for vehicle in sumolib.xml.parse("/home/vincenzo/simulazione _osm/simulazione.rou.xml", "vehicle"):
+    route = vehicle.route[0]  # Accesso al primo (e unico) elemento 'route'
+    edges = route.edges.split()  # Ottieni la lista degli edges della route
+    vehicle_routes[vehicle.id] = edges  # Aggiungi il veicolo e la sua route al dizionario
 
-step = 1
-while step < 10000:
-    traci.simulationStep()
-    vehicle_id = random.choice(traci.vehicle.getIDList())
-    route = traci.vehicle.getRoute(vehicle_id)
-    
-    # La prima e l'ultima strada della rotta rappresentano la partenza e l'arrivo
-    start_edge = route[0] if len(route) > 0 else None
-    end_edge = route[-1] if len(route) > 0 else None
+# Seleziona un veicolo casuale dall'elenco degli ID dei veicoli
+veicolo_id = random.choice(list(vehicle_routes.keys()))
+print(f"Veicolo selezionato: {veicolo_id}")
+def route_update(vehicle_id,end_edge):
+    new_destination_list=[]
+    for other_vehicle_id, other_route in vehicle_routes.items():
+      if other_vehicle_id != vehicle_id and end_edge in other_route:
+                        # Trova l'indice dell'edge corrente nella route
+        index = other_route.index(end_edge)
+                        # Verifica se esiste un edge successivo
+        if index + 1 < len(other_route):
+          next_edge = other_route[index + 1]
+                            # Aggiorna la route del veicolo corrente
+          new_destination_list.append(next_edge)  # Aggiungi il prossimo edge alla route
+    new_destination= random.choice(new_destination_list)
+    #traci.vehicle.changeTarget(veicolo_id,new_destination)
+    return new_destination 
 
-    if end_edge:  # Controlla che end_edge non sia None
-        if traci.vehicle.getRouteID(vehicle_id) == end_edge:
-            new_edge = get_random_accessible_edge(end_edge)
-            if new_edge:  # Controlla che new_edge non sia None
-                traci.vehicle.changeTarget(vehicle_id, new_edge)
-                print(f"Veicolo cambiato target a: {new_edge}")
-            else:
-                print("Non è stato possibile trovare un nuovo edge.")
-    
-    step += 1
-print(start_edge,end_edge)
-# Chiudi TraCI
+# Simulazione con controllo del veicolo
+while step < 1000:
+    try:
+        traci.simulationStep()  # Esegui un passo della simulazione
+        current_edge=traci.vehicle.getRoadID(veicolo_id)
+        destination = vehicle_routes[veicolo_id][-1]
+        print(vehicle_routes[veicolo_id])
+        if current_edge == destination :
+           new_destination=route_update(veicolo_id,destination)
+           traci.vehicle.changeTarget(veicolo_id,new_destination)
+           destination=current_edge
+        print(step,vehicle_routes[veicolo_id])
+        #emissioni = traci.vehicle.getCO2Emission(veicolo_id)  # Ottieni le emissioni di CO2
+        #print(f"Step {step}: Emissioni di CO2 del veicolo {veicolo_id}: {emissioni}")
+        step +=1
+    except TraCIException:
+        # Se il veicolo non è conosciuto, attendi e riprova
+        print(f"Il veicolo {veicolo_id} non è ancora entrato nella simulazione. Riprovo tra 1 secondo...")
+        time.sleep(1)  # Attendi 1 secondo prima di riprovare
+        step += 1  # Incrementa il contatore dei passi
+
 traci.close()
-
