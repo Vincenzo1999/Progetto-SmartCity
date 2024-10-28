@@ -1,14 +1,19 @@
-# Utilizziamo Python 3.9 come base
+# Utilizziamo Python 3.10 come base
 FROM python:3.10
+
+# Installiamo le dipendenze di sistema e SUMO
+RUN apt-get update && \
+    apt-get install -y sumo sumo-tools sumo-doc && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copiamo il nostro codice Python nel contenitore
 WORKDIR /app
 COPY . .
 
-# Installiamo le dipendenze
+# Installiamo le dipendenze Python
 RUN pip install --upgrade pip
-RUN pip3 install -r requirements.txt
-
+RUN pip install -r requirements.txt
 
 # Eseguiamo il nostro script Python quando il contenitore viene avviato
-CMD ["python", "-u","veicolo.py"]
+CMD ["python", "-u", "veicolo.py"]

@@ -11,8 +11,6 @@ services:
     networks:
       - mqtt-network
     
-    
-
   base_station:
     build: 
       context: ./
@@ -20,19 +18,22 @@ services:
     container_name: mqtt-bs
     depends_on:
       - mqtt-broker
+    volumes:
+      - /home/vincenzo/simulazione_osm/simulazione.osm:/app/simulazione.osm
     networks:
       - mqtt-network
 
   base_station2:
     build: 
-     context: ./
-     dockerfile: Dockerfile.base_station                                          
+      context: ./
+      dockerfile: Dockerfile.base_station                                          
     container_name: mqtt-bs2
     depends_on:
-     - mqtt-broker
+      - mqtt-broker
+    volumes:
+      - /home/vincenzo/simulazione_osm/simulazione.osm:/app/simulazione.osm
     networks:
-     - mqtt-network
-    
+      - mqtt-network
 
   veicolo:
     build: 
@@ -41,9 +42,13 @@ services:
     container_name: mqtt-veicolo
     depends_on:
       - mqtt-broker
+    volumes:
+      - /home/vincenzo/simulazione_osm/simulazione.osm:/app/simulazione.osm
+      - /home/vincenzo/simulazione_osm/simulazione.rou.xml:/app/simulazione.rou.xml
+      - /home/vincenzo/simulazione_osm/simulazione.sumocfg:/app/simulazione.sumocfg
+      - /home/vincenzo/simulazione_osm/simulazione.net.xml:/app/simulazione.net.xml
     networks:
       - mqtt-network
-   
 
 networks:
   mqtt-network:
