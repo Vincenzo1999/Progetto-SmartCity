@@ -1,58 +1,166 @@
-import traci
-import sumolib
 import random
 import time
-from traci.exceptions import TraCIException
+from paho.mqtt import client as mqtt_client
+from geolib import geohash
+import xml.etree.ElementTree as ET
+import traci
+import sumolib
+import traci.exceptions
 
-# Percorso al file di configurazione SUMO
-path = "/home/vincenzo/simulazione _osm/simulazione.sumocfg"
 
-# Avvia la simulazione
-traci.start(["sumo-gui", "-c", path])
-step = 0
-vehicle_routes = {}
-for vehicle in sumolib.xml.parse("/home/vincenzo/simulazione _osm/simulazione.rou.xml", "vehicle"):
-    route = vehicle.route[0]  # Accesso al primo (e unico) elemento 'route'
-    edges = route.edges.split()  # Ottieni la lista degli edges della route
-    vehicle_routes[vehicle.id] = edges  # Aggiungi il veicolo e la sua route al dizionario
+topics_bs = {'posizione': f'{geohash}/+/3430/0/',
+             'traffico': f'{geohash}/+/3432/0/',
+             'segnale': f'{geohash}/+/4/0/'}
 
-# Seleziona un veicolo casuale dall'elenco degli ID dei veicoli
-veicolo_id = random.choice(list(vehicle_routes.keys()))
-print(f"Veicolo selezionato: {veicolo_id}")
-def route_update(vehicle_id,end_edge):
-    new_destination_list=[]
-    for other_vehicle_id, other_route in vehicle_routes.items():
-      if other_vehicle_id != vehicle_id and end_edge in other_route:
-                        # Trova l'indice dell'edge corrente nella route
-        index = other_route.index(end_edge)
-                        # Verifica se esiste un edge successivo
-        if index + 1 < len(other_route):
-          next_edge = other_route[index + 1]
-                            # Aggiorna la route del veicolo corrente
-          new_destination_list.append(next_edge)  # Aggiungi il prossimo edge alla route
-    new_destination= random.choice(new_destination_list)
-    #traci.vehicle.changeTarget(veicolo_id,new_destination)
-    return new_destination 
+broker = "mqtt-broker"
+port = 1883
+veicolo_id= "1"
+# Percorso del file .osm
+osm_file_path = "/app/simulazione.osm"
 
-# Simulazione con controllo del veicolo
-while step < 1000:
+# Carica il file XML
+tree = ET.parse(osm_file_path)
+root = tree.getroot()
+
+# Estrai la bounding box dall'elemento 'bounds'
+bounds = root.find('bounds')
+if bounds is not None:
+    min_latitude = float(bounds.attrib['minlat'])
+    min_longitude = float(bounds.attrib['minlon'])
+    max_latitude = float(bounds.attrib['maxlat'])
+    max_longitude = float(bounds.attrib['maxlon'])
+
+    # Stampa i risultati
+    print(f"Min Latitudine: {min_latitude}, Min Longitudine: {min_longitude}")
+    print(f"Max Latitudine: {max_latitude}, Max Longitudine: {max_longitude}")
+else:
+    print("La bounding box non è presente nel file OSM.")
+
+
+def on_connect(client, userdata, connect_flags, reason_code, properties):
+    if reason_code == 0:
+        print("Connected to MQTT Broker!")
+        time.sleep(2)
+        for topic in topics_bs.values():
+            client.subscribe(topic)
+            print(f"Mi sono sottoscritto al topic {topic}")
+    else:
+        print(f"Failed to connect, return code {reason_code}")
+
+
+def publish(client):
+    path = "/app/simulazione.sumocfg"
+
+    # Avvia la simulazione
+    traci.start(["sumo", "-c", path, "--step-length", "1"])
+
+    # Crea un dizionario per le rotte dei veicoli
+    vehicle_routes = {}
+    for vehicle in sumolib.xml.parse("/app/simulazione.rou.xml", "vehicle"):
+        route = vehicle.route[0]
+        edges = route.edges.split()
+        vehicle_routes[vehicle.id] = edges
+
+    # Funzione per aggiornare la route di un veicolo
+    def route_update(vehicle_id):
+        original_route = vehicle_routes[vehicle_id]
+        # Seleziona un edge casuale per mantenere il veicolo attivo
+        next_edge = random.choice(original_route)
+        return next_edge
+
+    # Lista dei veicoli attivi
+    active_vehicles = set()
+
+    # Ciclo di simulazione
+    step = 0
+    while step < 2000:  # Aumenta il limite della simulazione se necessario
+        traci.simulationStep()
+
+        # Aggiungi nuovi veicoli solo se ci sono meno di un certo limite
+        new_vehicles = traci.simulation.getDepartedIDList()
+        active_vehicles.update(new_vehicles)
+       
+
+        # Itera sui veicoli attivi
+        for veicolo_id in list(active_vehicles):
+            try:
+                current_edge = traci.vehicle.getRoadID(veicolo_id)
+                route = traci.vehicle.getRoute(veicolo_id)
+                emission = traci.vehicle.getCO2Emission(veicolo_id)
+                traffic = traci.vehicle.getIDCount()
+                x, y = traci.vehicle.getPosition(veicolo_id)
+                lat, lon = traci.simulation.convertGeo(x, y)
+                speed = traci.vehicle.getSpeed(veicolo_id)
+
+                #print(f"Step {step} - Veicolo {veicolo_id}: emissione CO2 = {emission}, route = {route}")
+                #print(f"Step {step} - Veicolo {veicolo_id}: traffic = {traffic}, route = {route}")
+                #print(f"Step {step} - Veicolo {veicolo_id}: lat = {lat}, route = {route}")
+                #print(f"Step {step} - Veicolo {veicolo_id}: lon = {lon}, route = {route}")
+                #print(f"Step {step} - Veicolo {veicolo_id}: speed = {speed}, route = {route}")
+                timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                speed_veicolo = {"tmstp": timestamp, "e": [{"n": "4", "v": f"{speed}"}]}
+                latitudine_veicolo = {"tmstp": timestamp, "e": [{"n": "1", "v": f"{lat}"}]}
+                longitudine_veicolo = {"tmstp": timestamp, "e": [{"n": "2", "v": f"{lon}"}]}
+                emissione_veicolo = {"tmstp": timestamp, "e": [{"n": "3430/0/4", "v": f"{emission}"}]}
+                traffico_veicolo = {"tmstp": timestamp, "e": [{"n": "3430/0/4", "v": f"{traffic}"}]}
+                geohash = geohash.decode(latitudine_veicolo,longitudine_veicolo,6)
+                
+                topics_veicolo = {'posizione': f'{geohash}/{veicolo_id}/3430/0/',
+                  'traffico': f'{geohash}/{veicolo_id}/3432/0/'}
+                
+                messages = {
+                    topics_veicolo['posizione']: f"Latitudine: {latitudine_veicolo}",
+                    topics_veicolo['posizione']: f"Longitudine: {longitudine_veicolo}",
+                    topics_veicolo['posizione']: f"Velocità: {speed_veicolo}",  
+                    topics_veicolo['traffico']: f"Traffico: {traffico_veicolo}"  # Valore dinamico
+                }
+
+                # Se il veicolo è alla fine della route, reindirizzalo
+                if current_edge == route[-1]:
+                    next_edge = route_update(veicolo_id)
+                    route_find = traci.simulation.findRoute(current_edge, next_edge)
+                    if route_find.edges:
+                        new_route = [edge for edge in route_find.edges]
+                        traci.vehicle.setRoute(veicolo_id, new_route)
+
+            except traci.exceptions.TraCIException as e:
+                print(f"Errore a step {step} con veicolo {veicolo_id}: {str(e)}")
+
+        step += 1
+        time.sleep(0.5)  # Mantieni una pausa per rallentare la simulazione
+
+    traci.close()
+
+    for topic, message in messages.items():
+        result = client.publish(topic, message)
+        # Controllo se il messaggio è stato pubblicato con successo
+        if result.rc == mqtt_client.MQTT_ERR_SUCCESS:
+            print(f"Messaggio '{message}' inviato al topic '{topic}'")
+        else:
+            print(f"Errore nell'invio del messaggio al topic '{topic}'. Codice errore: {result.rc}")
+
+
+def on_message(client, userdata, message):
+    print(f"Received message '{message.payload.decode()}' on topic '{message.topic}'")
+
+
+def run():
+    veicolo = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, client_id=veicolo_id)
+    time.sleep(5)
+    veicolo.on_connect = on_connect
+    veicolo.on_message = on_message
+    veicolo.connect(broker, port, 5)
+
+    veicolo.loop_start()
+
     try:
-        traci.simulationStep()  # Esegui un passo della simulazione
-        current_edge=traci.vehicle.getRoadID(veicolo_id)
-        destination = vehicle_routes[veicolo_id][-1]
-        print(vehicle_routes[veicolo_id])
-        if current_edge == destination :
-           new_destination=route_update(veicolo_id,destination)
-           traci.vehicle.changeTarget(veicolo_id,new_destination)
-           destination=current_edge
-        print(step,vehicle_routes[veicolo_id])
-        #emissioni = traci.vehicle.getCO2Emission(veicolo_id)  # Ottieni le emissioni di CO2
-        #print(f"Step {step}: Emissioni di CO2 del veicolo {veicolo_id}: {emissioni}")
-        step +=1
-    except TraCIException:
-        # Se il veicolo non è conosciuto, attendi e riprova
-        print(f"Il veicolo {veicolo_id} non è ancora entrato nella simulazione. Riprovo tra 1 secondo...")
-        time.sleep(1)  # Attendi 1 secondo prima di riprovare
-        step += 1  # Incrementa il contatore dei passi
+        
+     publish(veicolo)
+            
+    except KeyboardInterrupt:
+        veicolo.loop_stop()  # Ferma il thread MQTT
+        veicolo.disconnect()  # Disconnette dal broker
 
-traci.close()
+
+if __name__ == '__main__':
+    run()

@@ -65,7 +65,7 @@ base_station_id = f"bs {cellid}"
 position_bs = geohash.encode(latitudine, longitudine, 7)
 
 def on_message(channel, method_frame, header_frame, body):
-     print(f"Ricevuto il messaggio con body {body.decode()} dal topic {topic}")
+    print(f"Ricevuto il messaggio con body {body.decode()} dal topic {topic}")
 
 time.sleep(5)
 

@@ -47,6 +47,8 @@ services:
       - /home/vincenzo/simulazione_osm/simulazione.rou.xml:/app/simulazione.rou.xml
       - /home/vincenzo/simulazione_osm/simulazione.sumocfg:/app/simulazione.sumocfg
       - /home/vincenzo/simulazione_osm/simulazione.net.xml:/app/simulazione.net.xml
+    environment:
+      - SUMO_HOME=/usr/share/sumo  # Assicurati di mettere il percorso corretto
     networks:
       - mqtt-network
 
