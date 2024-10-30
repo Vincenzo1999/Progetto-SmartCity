@@ -3,20 +3,32 @@ import random
 import time
 import requests
 from geolib import geohash
+import xml.etree.ElementTree as ET
+import traci.exceptions
 
-topics_veicolo = { 'posizione': 'veicolo.posizione', 
-                   'velocità': 'veicolo.velocità' }
-topics_bs = { 'posizione': 'bs.posizione', 
-              'traffico': 'bs.traffico',
-              'segnale': 'bs.signal' }
+
 
 api = "pk.3f5c5de68b06b081a2e814e3b186f773"
-latitudine_max = 38.1194325
-latitudine_min = 38.109894
-longitudine_max = 15.6574058
-longitudine_min = 15.6439948
-URL = f"http://www.opencellid.org/cell/getInArea?key={api}&BBOX={latitudine_min},{longitudine_min},{latitudine_max},{longitudine_max}&format=json"
+osm_file_path = "/app/simulazione.osm"
 
+# Carica il file XML
+tree = ET.parse(osm_file_path)
+root = tree.getroot()
+
+# Estrai la bounding box dall'elemento 'bounds'
+bounds = root.find('bounds')
+if bounds is not None:
+    min_latitude = float(bounds.attrib['minlat'])
+    min_longitude = float(bounds.attrib['minlon'])
+    max_latitude = float(bounds.attrib['maxlat'])
+    max_longitude = float(bounds.attrib['maxlon'])
+
+    # Stampa i risultati
+    print(f"Min Latitudine: {min_latitude}, Min Longitudine: {min_longitude}")
+    print(f"Max Latitudine: {max_latitude}, Max Longitudine: {max_longitude}")
+else:
+    print("La bounding box non è presente nel file OSM.")
+URL = f"http://www.opencellid.org/cell/getInArea?key={api}&BBOX={min_latitude},{min_longitude},{max_latitude},{max_longitude}&format=json"
 broker = "amqp-broker"
 port = 5672
 
@@ -62,7 +74,13 @@ else:
 
 # Genera i dati della stazione base
 base_station_id = f"bs {cellid}"
-position_bs = geohash.encode(latitudine, longitudine, 7)
+geohash = geohash.encode(latitudine, longitudine, 7)
+
+topics_veicolo = {'posizione': f'{geohash}.+.3430.0.',
+                  'traffico': f'{geohash}.+.3432.0.'}
+topics_bs = { 'posizione' : f'{geohash}.{base_station_id}.3430.0.', 
+          'traffico': f'{geohash}.{base_station_id}.3432.0.',
+            'segnale' : f'{geohash}.{base_station_id}.4.0.'}  
 
 def on_message(channel, method_frame, header_frame, body):
     print(f"Ricevuto il messaggio con body {body.decode()} dal topic {topic}")
@@ -90,18 +108,18 @@ try:
      timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
 
-     traffic = {
-    "tmstp": timestamp, 
-    "e": [{ "n": "3432/0/1", "v": random.choice(["low","medium","high"]) }]
-}
+     #traffic = {
+    #"tmstp": timestamp, 
+    #"e": [{ "n": "1", "v": random.choice(["low","medium","high"]) }]
+#}
 
      signal = {
     "tmstp": timestamp, 
-    "e": [{ "n": "4/0/2", "v": str(random.randint(-120, -50)) }]
+    "e": [{ "n": "2", "v": str(random.randint(-120, -50)) }]
 }
      messages = {
-        topics_bs['posizione']: f"Posizione: {position_bs}",  # Valore dinamico
-        topics_bs['traffico']: f"Traffico: {traffic} veicoli",  # Valore dinamico
+        topics_bs['posizione']: f"Posizione: {latitudine}",  # Valore dinamico
+        #topics_bs['traffico']: f"Traffico: {traffic} veicoli",  # Valore dinamico
         topics_bs['segnale']: f"Segnale: {signal} dBm"  # Valore dinamico
 }
 # Pubblicare i messaggi

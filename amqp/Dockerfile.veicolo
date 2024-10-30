@@ -1,6 +1,12 @@
 # Utilizziamo Python 3.9 come base
 FROM python:3.10
 
+# Installiamo le dipendenze di sistema e SUMO
+RUN apt-get update && \
+    apt-get install -y sumo sumo-tools sumo-doc && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copiamo il nostro codice Python nel contenitore
 WORKDIR /app
 COPY . .

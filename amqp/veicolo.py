@@ -2,58 +2,131 @@ import random
 import time
 import pika
 from geolib import geohash
+import xml.etree.ElementTree as ET
+import traci
+import sumolib
+import traci.exceptions
 
-topics_veicolo = { 'posizione' : 'veicolo.posizione', 
-            'velocità' : 'veicolo.velocità'  }
-topics_bs = { 'posizione' : 'bs.posizione', 
-          'traffico' : 'bs.traffico',
-            'segnale' : 'bs.signal'  }
-veicolo_id = f"veicolo {random.randint(0,100)}"
+# Definizione dei topic e variabili
+veicolo_id = "1"
+  # Sostituisci "geohash" con il valore corretto
 broker = "amqp-broker"
 port = 5672
+osm_file_path = "/app/simulazione.osm"
+geohash = "sqg0u7v"
 
-latitudine_max = 38.1194325
-latitudine_min = 38.109894
-longitudine_max = 15.6574058
-longitudine_min = 15.6439948
+topics_veicolo = {
+    'posizione': f'{geohash}.{veicolo_id}.3430.0',
+    'traffico': f'{geohash}.{veicolo_id}.3432.0'
+}
+topics_bs = {
+    'posizione': f'{geohash}.*.3430.0',
+    'traffico': f'{geohash}.*.3432.0'
+}
 
+# Carica il file XML
+tree = ET.parse(osm_file_path)
+root = tree.getroot()
+
+# Estrai la bounding box dall'elemento 'bounds'
+bounds = root.find('bounds')
+if bounds is not None:
+    min_latitude = float(bounds.attrib['minlat'])
+    min_longitude = float(bounds.attrib['minlon'])
+    max_latitude = float(bounds.attrib['maxlat'])
+    max_longitude = float(bounds.attrib['maxlon'])
+    print(f"Min Latitudine: {min_latitude}, Min Longitudine: {min_longitude}")
+    print(f"Max Latitudine: {max_latitude}, Max Longitudine: {max_longitude}")
+
+# Funzione per aggiornare la route
+def route_update(vehicle_id, vehicle_routes):
+    original_route = vehicle_routes[vehicle_id]
+    next_edge = random.choice(original_route)
+    return next_edge
+
+# Callback per la ricezione dei messaggi
 def on_message(channel, method_frame, header_frame, body):
-     print(f"Ricevuto il messaggio con body {body.decode()} dal topic {topic}")
+    print(f"Ricevuto il messaggio con body {body.decode()} dal topic {method_frame.routing_key}")
 
+# Configurazione connessione RabbitMQ
 time.sleep(5)
-
 credentials = pika.PlainCredentials("guest", 'guest')
 connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host = broker,port=port,credentials=credentials))
+    pika.ConnectionParameters(host=broker, port=port, credentials=credentials)
+)
 channel = connection.channel()
 channel.exchange_declare(exchange='topic', exchange_type='topic')
 
+# Dichiarazione e binding delle code ai topic di interesse
 for topic in topics_bs.values():
- channel.queue_declare(queue=topic, exclusive=True)
- channel.queue_bind(exchange='topic', queue=topic)
- channel.basic_consume(topic, on_message_callback= on_message)
+    queue = channel.queue_declare(queue=topic, exclusive=True).method.queue
+    channel.queue_bind(exchange='topic', queue=queue, routing_key=topic)
+    channel.basic_consume(queue=queue, on_message_callback=on_message, auto_ack=True)
+    print(f"Sottoscritto al topic {topic}")
 
- print(f"Sottoscritto al topic {topic}")  
-
-#channel.start_consuming()
+# Inizia la simulazione SUMO
 try:
-   while True: 
-      latitudine = random.uniform(latitudine_min,latitudine_max)
-      longitudine = random.uniform(longitudine_min,longitudine_max)
-      position_veicolo = geohash.encode (latitudine,longitudine,7)
-      timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-      speed = {"tmstp" : timestamp, "e": [{ "n" : "3430/0/4" , "v" : f"{random.randint(0, 60)}" }] }
-    
-      messages = {
-        topics_veicolo['posizione']: f"Posizione: {position_veicolo}",  # Valore dinamico
-        topics_veicolo['velocità']: f"Velocità: {speed} km/h"  # Valore dinamico
-    }
-    
-      for topic, message in messages.items():
-         channel.basic_publish(exchange='topic', routing_key=topic, body=message)
-         print(f"Messaggio {message} inviato!")
-      time.sleep(10)
-      channel.connection.process_data_events()
+    path = "/app/simulazione.sumocfg"
+    traci.start(["sumo", "-c", path, "--step-length", "1"])
+
+    vehicle_routes = {}
+    for vehicle in sumolib.xml.parse("/app/simulazione.rou.xml", "vehicle"):
+        route = vehicle.route[0]
+        edges = route.edges.split()
+        vehicle_routes[vehicle.id] = edges
+
+    active_vehicles = set()
+    step = 0
+
+    while step < 2000:  # Aumenta il limite della simulazione se necessario
+        traci.simulationStep()
+        new_vehicles = traci.simulation.getDepartedIDList()
+        active_vehicles.update(new_vehicles)
+
+        messages = {}  # Inizializza il dizionario dei messaggi
+
+        for veicolo_id in list(active_vehicles):
+            try:
+                current_edge = traci.vehicle.getRoadID(veicolo_id)
+                route = traci.vehicle.getRoute(veicolo_id)
+                emission = traci.vehicle.getCO2Emission(veicolo_id)
+                traffic = traci.vehicle.getIDCount()
+                x, y = traci.vehicle.getPosition(veicolo_id)
+                lat, lon = traci.simulation.convertGeo(x, y)
+                speed = traci.vehicle.getSpeed(veicolo_id)
+
+                timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                geohash_value = geohash.encode(lat, lon, 6)
+
+                topics_veicolo = {
+                    'posizione': f'{geohash_value}/{veicolo_id}/3430/0/',
+                    'traffico': f'{geohash_value}/{veicolo_id}/3432/0/'
+                }
+                messages = {
+                topics_veicolo['posizione'] = f"Latitudine: {lat}, Longitudine: {lon}, Velocità: {speed}",
+                topics_veicolo['traffico'] = f"Traffico: {traffic}" }
+               
+               
+                      
+                if current_edge == route[-1]:
+                    next_edge = route_update(veicolo_id, vehicle_routes)
+                    route_find = traci.simulation.findRoute(current_edge, next_edge)
+                    if route_find.edges:
+                        new_route = [edge for edge in route_find.edges]
+                        traci.vehicle.setRoute(veicolo_id, new_route)
+
+            except traci.exceptions.TraCIException as e:
+                print(f"Errore a step {step} con veicolo {veicolo_id}: {str(e)}")
+
+        for topic, message in messages.items():
+            channel.basic_publish(exchange='topic', routing_key=topic, body=message)
+            print(f"Messaggio {message} inviato!")
+
+        time.sleep(10)
+        step += 1
+
 except KeyboardInterrupt:
-   connection.close()
-   
+    print("Simulazione interrotta dall'utente.")
+finally:
+    connection.close()
+    traci.close()

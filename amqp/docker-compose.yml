@@ -20,6 +20,8 @@ services:
     container_name: amqp-bs
     depends_on:
       - amqp-broker
+    volumes:
+      - /home/vincenzo/simulazione_osm/simulazione.osm:/app/simulazione.osm
     networks:
       - amqp-network
     
@@ -31,6 +33,13 @@ services:
     container_name: amqp-veicolo
     depends_on:
       - amqp-broker
+    volumes:
+      - /home/vincenzo/simulazione_osm/simulazione.osm:/app/simulazione.osm
+      - /home/vincenzo/simulazione_osm/simulazione.rou.xml:/app/simulazione.rou.xml
+      - /home/vincenzo/simulazione_osm/simulazione.sumocfg:/app/simulazione.sumocfg
+      - /home/vincenzo/simulazione_osm/simulazione.net.xml:/app/simulazione.net.xml
+    environment:
+      - SUMO_HOME=/usr/share/sumo  # Assicurati di mettere il percorso corretto
     networks:
       - amqp-network
    

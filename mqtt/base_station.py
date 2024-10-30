@@ -103,7 +103,7 @@ def publish(client):
     signal = {"tmstp" : timestamp, "e": [ { "n" : "2" , "v" : f"{random.randint(-120, -50)} " }] } 
     messages = {
         topics_bs['posizione']: f"Latitudine: {latitudine_antenna}",
-          topics_bs['posizione']: f"Latitudine: {latitudine_antenna}",  # Valore dinamico
+        topics_bs['posizione']: f"Longitudine: {longitudine_antenna}",  # Valore dinamico
         #topics_bs['traffico']: f"Traffico: {traffic} veicoli",  # Valore dinamico
         topics_bs['segnale']: f"Segnale: {signal} dBm"  # Valore dinamico
     }
