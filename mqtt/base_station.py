@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 api = "pk.3f5c5de68b06b081a2e814e3b186f773"
 
 # Percorso del file .osm
-osm_file_path = "/app/simulazione.osm"
+osm_file_path = "/app/Stadio.osm"
 
 # Carica il file XML
 tree = ET.parse(osm_file_path)

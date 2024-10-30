@@ -9,19 +9,18 @@ import traci.exceptions
 
 # Definizione dei topic e variabili
 veicolo_id = "1"
-  # Sostituisci "geohash" con il valore corretto
 broker = "amqp-broker"
 port = 5672
 osm_file_path = "/app/simulazione.osm"
-geohash = "sqg0u7v"
+geohash_prefix = "sqg0u7"
 
 topics_veicolo = {
-    'posizione': f'{geohash}.{veicolo_id}.3430.0',
-    'traffico': f'{geohash}.{veicolo_id}.3432.0'
+    'posizione': f'{geohash_prefix}.{veicolo_id}.3430.0',
+    'traffico': f'{geohash_prefix}.{veicolo_id}.3432.0'
 }
 topics_bs = {
-    'posizione': f'{geohash}.*.3430.0',
-    'traffico': f'{geohash}.*.3432.0'
+    'posizione': f'{geohash_prefix}.*.3430.0',
+    'traffico': f'{geohash_prefix}.*.3432.0'
 }
 
 # Carica il file XML
@@ -98,16 +97,16 @@ try:
                 timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
                 geohash_value = geohash.encode(lat, lon, 6)
 
+                # Aggiorna i topic con il geohash calcolato
                 topics_veicolo = {
                     'posizione': f'{geohash_value}/{veicolo_id}/3430/0/',
                     'traffico': f'{geohash_value}/{veicolo_id}/3432/0/'
                 }
-                messages = {
-                topics_veicolo['posizione'] = f"Latitudine: {lat}, Longitudine: {lon}, Velocità: {speed}",
-                topics_veicolo['traffico'] = f"Traffico: {traffic}" }
-               
-               
-                      
+                # Popola il dizionario dei messaggi con i valori aggiornati
+                messages[topics_veicolo['posizione']] = f"Latitudine: {lat}, Longitudine: {lon}, Velocità: {speed}"
+                messages[topics_veicolo['traffico']] = f"Traffico: {traffic}"
+
+                # Aggiorna la route se il veicolo è alla fine
                 if current_edge == route[-1]:
                     next_edge = route_update(veicolo_id, vehicle_routes)
                     route_find = traci.simulation.findRoute(current_edge, next_edge)
@@ -118,11 +117,12 @@ try:
             except traci.exceptions.TraCIException as e:
                 print(f"Errore a step {step} con veicolo {veicolo_id}: {str(e)}")
 
+        # Pubblica i messaggi su RabbitMQ
         for topic, message in messages.items():
             channel.basic_publish(exchange='topic', routing_key=topic, body=message)
             print(f"Messaggio {message} inviato!")
 
-        time.sleep(10)
+        time.sleep(1)
         step += 1
 
 except KeyboardInterrupt:

@@ -18,7 +18,7 @@ broker = "mqtt-broker"
 port = 1883
 
 # Percorso del file .osm
-osm_file_path = "/app/simulazione.osm"
+osm_file_path = "/app/Stadio.osm"
 
 # Carica il file XML
 tree = ET.parse(osm_file_path)
@@ -65,7 +65,7 @@ def publish_messages(client, messages):
             print(f"Errore nell'invio del messaggio al topic '{topic}'. Codice errore: {result.rc}")
 
 def run():
-    veicolo_id = "0"
+    veicolo_id = "11"
     veicolo = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, veicolo_id)
     time.sleep(5)
     veicolo.on_connect = on_connect
@@ -75,11 +75,11 @@ def run():
     veicolo.loop_start()
 
     try:
-        path = "/app/simulazione.sumocfg"
+        path = "/app/Stadio.sumocfg"
         traci.start(["sumo", "-c", path, "--step-length", "1"])
 
         vehicle_routes = {}
-        for vehicle in sumolib.xml.parse("/app/simulazione.rou.xml", "vehicle"):
+        for vehicle in sumolib.xml.parse("/app/Stadio.rou.xml", "vehicle"):
             route = vehicle.route[0]
             edges = route.edges.split()
             vehicle_routes[vehicle.id] = edges
@@ -101,7 +101,7 @@ def run():
                     emission = traci.vehicle.getCO2Emission(veicolo_id)
                     traffic = traci.vehicle.getIDCount()
                     x, y = traci.vehicle.getPosition(veicolo_id)
-                    lat, lon = traci.simulation.convertGeo(x, y)
+                    lon, lat = traci.simulation.convertGeo(x, y)
                     speed = traci.vehicle.getSpeed(veicolo_id)
 
                     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
