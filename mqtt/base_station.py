@@ -75,10 +75,12 @@ else:
 base_station_id = f"bs {cellid}"
 geohash = geohash.encode (latitudine,longitudine,6)
 
-topics_veicolo = {'posizione': f'{geohash}/+/3430/0/',
+topics_veicolo = {'latitudine': f'{geohash}/+/3430/0/',
+                  'longitudine': f'{geohash}/+/3430/0/',
+                  'velocità': f'{geohash}/+/3430/0/',
                   'traffico': f'{geohash}/+/3432/0/'}
-topics_bs = { 'posizione' : f'{geohash}/{base_station_id}/3430/0/', 
-          'traffico': f'{geohash}/{base_station_id}/3432/0/',
+topics_bs = { 'latitudine' : f'{geohash}/{base_station_id}/3430/0/',
+             'longitudine' : f'{geohash}/{base_station_id}/3430/0/', 
             'segnale' : f'{geohash}/{base_station_id}/4/0/'}  
 
 def on_connect(client, userdata, connect_flags, reason_code, properties):
@@ -92,27 +94,25 @@ def on_connect(client, userdata, connect_flags, reason_code, properties):
         print(f"Failed to connect, return code {reason_code}")
 
 def on_message(client, userdata, message):
-    print(f"Received message '{message.payload.decode()}' on topic '{message.topic}'")
+    print(f"Received message {message.topic}{message.payload.decode()}")
 
 def publish(client):
     # Generazione dinamica dei valori dei messaggi
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     longitudine_antenna= {"tmstp" : timestamp, "e": [{ "n" : "2" , "v" : f"{longitudine}" }] }
     latitudine_antenna= {"tmstp" : timestamp, "e": [{ "n" : "1" , "v" : f"{latitudine}" }] }
-    #traffic = {"tmstp" : timestamp, "e": [{ "n" : "1" , "v" : f"{random.randint(0, 200)}" }] } # 0 low 1 medium 2 high
     signal = {"tmstp" : timestamp, "e": [ { "n" : "2" , "v" : f"{random.randint(-120, -50)} " }] } 
     messages = {
-        topics_bs['posizione']: f"Latitudine: {latitudine_antenna}",
-        topics_bs['posizione']: f"Longitudine: {longitudine_antenna}",  # Valore dinamico
-        #topics_bs['traffico']: f"Traffico: {traffic} veicoli",  # Valore dinamico
-        topics_bs['segnale']: f"Segnale: {signal} dBm"  # Valore dinamico
+        topics_bs['latitudine']: f"{latitudine_antenna}",
+        topics_bs['longitudine']: f"{longitudine_antenna}",  # Valore dinamico
+        topics_bs['segnale']: f"{signal} dBm"  # Valore dinamico
     }
     
     for topic, message in messages.items():
         result = client.publish(topic, message)
         # Controllo se il messaggio è stato pubblicato con successo
         if result.rc == mqtt_client.MQTT_ERR_SUCCESS:
-            print(f"Messaggio '{message}' inviato al topic '{topic}'")
+            print(f"Messaggio {topic}{message} inviato")
         else:
             print(f"Errore nell'invio del messaggio al topic '{topic}'. Codice errore: {result.rc}")
 
@@ -128,7 +128,7 @@ def run():
     try:
         while True:
             publish(bs)
-            time.sleep(10)
+            time.sleep(5)
     except KeyboardInterrupt:
         bs.loop_stop()
         bs.disconnect()

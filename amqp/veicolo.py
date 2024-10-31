@@ -8,7 +8,7 @@ import sumolib
 import traci.exceptions
 
 # Definizione dei topic e variabili
-veicolo_id = "1"
+veicolo_id = "11"
 broker = "amqp-broker"
 port = 5672
 osm_file_path = "/app/simulazione.osm"
@@ -84,14 +84,14 @@ try:
 
         messages = {}  # Inizializza il dizionario dei messaggi
 
-        for veicolo_id in list(active_vehicles):
+        if veicolo_id in list(active_vehicles):
             try:
                 current_edge = traci.vehicle.getRoadID(veicolo_id)
                 route = traci.vehicle.getRoute(veicolo_id)
                 emission = traci.vehicle.getCO2Emission(veicolo_id)
                 traffic = traci.vehicle.getIDCount()
                 x, y = traci.vehicle.getPosition(veicolo_id)
-                lat, lon = traci.simulation.convertGeo(x, y)
+                lon, lat= traci.simulation.convertGeo(x, y)
                 speed = traci.vehicle.getSpeed(veicolo_id)
 
                 timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())

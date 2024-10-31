@@ -7,73 +7,55 @@ import traci
 import sumolib
 import traci.exceptions
 
-# Definizione dei topic per il broker
-topics_bs = {
-    'posizione': f'geohash/+/3430/0/',
-    'traffico': f'geohash/+/3432/0/',
-    'segnale': f'geohash/+/4/0/'
-}
-
+# Configurazione del broker MQTT
 broker = "mqtt-broker"
 port = 1883
 
 # Percorso del file .osm
 osm_file_path = "/app/Stadio.osm"
 
-# Carica il file XML
+# Carica il file XML e trova la bounding box
 tree = ET.parse(osm_file_path)
 root = tree.getroot()
-
-# Estrai la bounding box dall'elemento 'bounds'
 bounds = root.find('bounds')
 if bounds is not None:
     min_latitude = float(bounds.attrib['minlat'])
     min_longitude = float(bounds.attrib['minlon'])
     max_latitude = float(bounds.attrib['maxlat'])
     max_longitude = float(bounds.attrib['maxlon'])
-    print(f"Min Latitudine: {min_latitude}, Min Longitudine: {min_longitude}")
-    print(f"Max Latitudine: {max_latitude}, Max Longitudine: {max_longitude}")
 else:
     print("La bounding box non è presente nel file OSM.")
 
+# Funzione di connessione MQTT
 def on_connect(client, userdata, connect_flags, reason_code, properties):
     if reason_code == 0:
         print("Connesso al broker MQTT!")
-        time.sleep(2)
-        for topic in topics_bs.values():
-            client.subscribe(topic)
-            print(f"Mi sono sottoscritto al topic {topic}")
     else:
         print(f"Connessione fallita, codice di ritorno {reason_code}")
 
-# Funzione per aggiornare la route di un veicolo
-def route_update(vehicle_id, vehicle_routes):
-    original_route = vehicle_routes[vehicle_id]
-    next_edge = random.choice(original_route)
-    return next_edge
-
 # Funzione per ricevere messaggi
 def on_message(client, userdata, message):
-    print(f"Messaggio ricevuto '{message.payload.decode()}' sul topic '{message.topic}'")
+    print(f"Messaggio  '{message.topic}''{message.payload.decode()}' ricevuto ")
 
+# Funzione per pubblicare messaggi
 def publish_messages(client, messages):
     for topic, message in messages.items():
         result = client.publish(topic, message)
         if result.rc == mqtt_client.MQTT_ERR_SUCCESS:
-            print(f"Messaggio '{message}' inviato al topic '{topic}'")
+            print(f"Messaggio '{topic}''{message}' inviato ")
         else:
             print(f"Errore nell'invio del messaggio al topic '{topic}'. Codice errore: {result.rc}")
 
+# Funzione principale di esecuzione
 def run():
     veicolo_id = "11"
     veicolo = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, veicolo_id)
-    time.sleep(5)
+    
     veicolo.on_connect = on_connect
     veicolo.on_message = on_message
     veicolo.connect(broker, port, 5)
-
     veicolo.loop_start()
-
+    
     try:
         path = "/app/Stadio.sumocfg"
         traci.start(["sumo", "-c", path, "--step-length", "1"])
@@ -85,6 +67,7 @@ def run():
             vehicle_routes[vehicle.id] = edges
 
         active_vehicles = set()
+        previous_geohash = None
         step = 0
 
         while step < 2000:  # Aumenta il limite della simulazione se necessario
@@ -92,36 +75,54 @@ def run():
             new_vehicles = traci.simulation.getDepartedIDList()
             active_vehicles.update(new_vehicles)
 
-            messages = {}  # Inizializza il dizionario dei messaggi
+            messages = {}
 
-            for veicolo_id in list(active_vehicles):
+            if veicolo_id in list(active_vehicles):
                 try:
-                    current_edge = traci.vehicle.getRoadID(veicolo_id)
-                    route = traci.vehicle.getRoute(veicolo_id)
-                    emission = traci.vehicle.getCO2Emission(veicolo_id)
-                    traffic = traci.vehicle.getIDCount()
                     x, y = traci.vehicle.getPosition(veicolo_id)
                     lon, lat = traci.simulation.convertGeo(x, y)
-                    speed = traci.vehicle.getSpeed(veicolo_id)
-
-                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                    
                     geohash_value = geohash.encode(lat, lon, 6)
 
-                    topics_veicolo = {
-                        'posizione': f'{geohash_value}/{veicolo_id}/3430/0/',
-                        'traffico': f'{geohash_value}/{veicolo_id}/3432/0/'
-                    }
+                    # Controllo e aggiornamento della sottoscrizione in base al geohash
+                    if geohash_value != previous_geohash:
+                        # Disiscrivi dal topic del geohash precedente, se esistente
+                        if previous_geohash:
+                            old_topics = {
+                                'posizione': f'{previous_geohash}/{veicolo_id}/3430/0/',
+                                'traffico': f'{previous_geohash}/{veicolo_id}/3432/0/'
+                            }
+                            for topic in old_topics.values():
+                                veicolo.unsubscribe(topic)
+                                print(f"Disiscritto dal topic {topic}")
 
-                    messages[topics_veicolo['posizione']] = f"Latitudine: {lat}, Longitudine: {lon}, Velocità: {speed}"
-                    messages[topics_veicolo['traffico']] = f"Traffico: {traffic}"
+                        # Aggiorna e sottoscrivi ai topic relativi al nuovo geohash
+                        topics_bs = {
+                            'posizione': f'{geohash_value}/+/3430/0/',
+                            'traffico': f'{geohash_value}/+/3432/0/',
+                            'signal': f'{geohash_value}/+/4/0/'
+                        }
+                        for topic in topics_bs.values():
+                            veicolo.subscribe(topic)
+                            print(f"Sottoscritto al topic {topic}")
 
-                    if current_edge == route[-1]:
-                        next_edge = route_update(veicolo_id, vehicle_routes)
-                        route_find = traci.simulation.findRoute(current_edge, next_edge)
-                        if route_find.edges:
-                            new_route = [edge for edge in route_find.edges]
-                            traci.vehicle.setRoute(veicolo_id, new_route)
-
+                        previous_geohash = geohash_value  # Aggiorna il geohash precedente
+                    topics_veicolo = {'latitudine': f'{geohash_value}/{veicolo_id}/3430/0/',
+                  'longitudine': f'{geohash_value}/{veicolo_id}/3430/0/',
+                  'velocità': f'{geohash_value}/{veicolo_id}/3430/0/',
+                  'traffico': f'{geohash_value}/{veicolo_id}/3432/0/'}
+                    # Genera i messaggi per il nuovo geohash
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                    longitudine = {"tmstp" : timestamp ,"e": [{"n" : "2" , "v" : f"{lon} " }] }
+                    latitudine = {"tmstp" : timestamp ,"e": [{"n" : "1" , "v" : f"{lat} " }] }
+                    speed = {"tmstp" : timestamp ,"e": [{"n" : "4" , "v" : f"{traci.vehicle.getSpeed(veicolo_id)} " }] }
+                    traffic = {"tmstp" : timestamp ,"e": [{"n" : "1" , "v" : f"{traci.vehicle.getIDCount()} " }] }
+                    messages = {
+        topics_veicolo['latitudine']: f"{latitudine}", 
+        topics_veicolo['longitudine']: f"{longitudine}",
+        topics_veicolo['velocità']: f"{speed}",    
+        topics_veicolo['traffico']: f"{traffic}",  # Valore dinamico
+                 }
                 except traci.exceptions.TraCIException as e:
                     print(f"Errore a step {step} con veicolo {veicolo_id}: {str(e)}")
 
@@ -133,8 +134,8 @@ def run():
         traci.close()
 
     except KeyboardInterrupt:
-        veicolo.loop_stop()  # Ferma il thread MQTT
-        veicolo.disconnect()  # Disconnette dal broker
+        veicolo.loop_stop()
+        veicolo.disconnect()
 
 if __name__ == '__main__':
     run()
