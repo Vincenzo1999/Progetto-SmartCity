@@ -39,7 +39,7 @@ services:
       - /home/vincenzo/Simulazione/Stadio.sumocfg:/app/Stadio.sumocfg
       - /home/vincenzo/Simulazione/Stadio.net.xml:/app/Stadio.net.xml
     environment:
-      - SUMO_HOME=/usr/share/sumo  # Assicurati di mettere il percorso corretto
+      - SUMO_HOME=/usr/share/sumo  
     networks:
       - amqp-network
    

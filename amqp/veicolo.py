@@ -45,6 +45,7 @@ def unsubscribe_from_topic(channel, queue, topic):
 # Configurazione connessione RabbitMQ
 time.sleep(5)
 credentials = pika.PlainCredentials("guest", 'guest')
+time.sleep(5)
 connection = pika.BlockingConnection(
     pika.ConnectionParameters(host=broker, port=port, credentials=credentials)
 )

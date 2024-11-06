@@ -48,7 +48,7 @@ def publish_messages(client, messages):
 
 # Funzione principale di esecuzione
 def run():
-    veicolo_id = "11"
+    veicolo_id = "56"
     veicolo = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, veicolo_id)
     
     veicolo.on_connect = on_connect

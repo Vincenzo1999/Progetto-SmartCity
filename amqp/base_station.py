@@ -82,6 +82,7 @@ time.sleep(5)
 
 credentials = pika.PlainCredentials("guest", 'guest')
 connection_params = pika.ConnectionParameters(host=broker, port=port, credentials=credentials)
+time.sleep(5)
 connection = pika.BlockingConnection(connection_params)
 channel = connection.channel()
 
