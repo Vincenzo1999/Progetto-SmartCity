@@ -148,6 +148,7 @@ try:
             # Pubblica i messaggi AMQP
             for topic, message in messages.items():
                 channel.basic_publish(exchange='topic', routing_key=topic, body=message)
+                time.sleep(1)
                 print(f"Messaggio {topic}{message} inviato")
             time.sleep(10)
 
