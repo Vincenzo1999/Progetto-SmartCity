@@ -72,7 +72,7 @@ try:
         new_vehicles = traci.simulation.getDepartedIDList()
         active_vehicles.update(new_vehicles)
 
-        messages = {}
+        
 
         if veicolo_id in list(active_vehicles):
             try:
@@ -83,9 +83,9 @@ try:
 
                 # Definizione dei topic di base station (BS)
                 topics_bs = {
-                    'posizione': f'{geohash_value}.*.3430.0.',
-                    'traffico': f'{geohash_value}.*.3432.0.',
-                    'signal': f'{geohash_value}.*.4.0.'
+                    'posizione': f'{geohash_value}.bs.*.3430.0.',
+                    'traffico': f'{geohash_value}.bs.*.3432.0.',
+                    'emissioni': f'{geohash_value}.bs.*.3428.0.',
                 }
 
                 # Dichiarazione e binding delle code per ogni topic di BS
@@ -103,17 +103,18 @@ try:
                     # Disiscrivi dal topic del geohash precedente, se esistente
                     if previous_geohash:
                         old_topics = {
-                            'posizione': f'{previous_geohash}.{veicolo_id}.3430.0.',
-                            'traffico': f'{previous_geohash}.{veicolo_id}.3432.0.'
+                            'posizione': f'{previous_geohash}.bs.*.3430.0.',
+                                'traffico': f'{previous_geohash}.bs.*.3432.0.',
+                               'emissioni': f'{previous_geohash}.bs.*.3428.0.',
                         }
                         for key, topic in old_topics.items():
                             unsubscribe_from_topic(channel, queues[key], topic)
 
                     # Aggiorna e sottoscrivi ai topic relativi al nuovo geohash
                     new_topics = {
-                        'posizione': f'{geohash_value}.*.3430.0.',
-                        'traffico': f'{geohash_value}.*.3432.0.',
-                        'signal': f'{geohash_value}.*.4.0.'
+                        'posizione': f'{geohash_value}.bs.*.3430.0.',
+                            'traffico': f'{geohash_value}.bs.*.3432.0.',
+                            'emissioni': f'{geohash_value}.bs.*.3428.0.',
                     }
                     for key, topic in new_topics.items():
                         channel.queue_bind(exchange='topic', queue=queues[key], routing_key=topic)
@@ -126,20 +127,20 @@ try:
                 longitudine = {"tmstp": timestamp, "e": [{"n": "2", "v": f"{lon} "}]}
                 latitudine = {"tmstp": timestamp, "e": [{"n": "1", "v": f"{lat} "}]}
                 speed = {"tmstp": timestamp, "e": [{"n": "4", "v": f"{traci.vehicle.getSpeed(veicolo_id)} "}]}
-                traffic = {"tmstp": timestamp, "e": [{"n": "1", "v": f"{traci.vehicle.getIDCount()} "}]}
-
+                emission = {"tmstp" : timestamp ,"e": [{"n" : "17" , "v" : f"{traci.vehicle.getCO2Emission(veicolo_id)} " }] }
+                
                 topics_veicolo = {
-                    'latitudine': f'{geohash_value}.{veicolo_id}.3430.0.',
-                    'longitudine': f'{geohash_value}.{veicolo_id}.3430.0.',
-                    'velocità': f'{geohash_value}.{veicolo_id}.3430.0.',
-                    'traffico': f'{geohash_value}.{veicolo_id}.3432.0.'
+                    'latitudine': f'{geohash_value}.vehicle.{veicolo_id}.3430.0.',
+                  'longitudine': f'{geohash_value}.vehicle.{veicolo_id}.3430.0.',
+                  'velocità': f'{geohash_value}.vehicle.{veicolo_id}.3430.0.',
+                  'emissioni': f'{geohash_value}.vehicle.{veicolo_id}.3428.0.'
                 }
 
                 messages = {
                     topics_veicolo['latitudine']: str(latitudine), 
                     topics_veicolo['longitudine']: str(longitudine),
                     topics_veicolo['velocità']: str(speed),
-                    topics_veicolo['traffico']: str(traffic)
+                    topics_veicolo['emissioni']: str(emission) 
                 }
 
             except traci.exceptions.TraCIException as e:

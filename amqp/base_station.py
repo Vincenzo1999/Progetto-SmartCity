@@ -63,17 +63,21 @@ else:
     print("Dettagli:", response.text)
 
 # Genera i dati della stazione base
-base_station_id = f"bs_{cellid}"
-geohash_value = geohash.encode(latitudine, longitudine, 6)
+base_station_id = f"{cellid}"
+geohash = geohash.encode(latitudine, longitudine, 6)
 
 topics_veicolo = {
-    'posizione': f'{geohash_value}.*.3430.0.',
-    'traffico': f'{geohash_value}.*.3432.0.'
-}
+    'latitudine': f'{geohash}.vehicle.*.3430.0.',
+                  'longitudine': f'{geohash}.vehicle.*.3430.0.',
+                  'velocità': f'{geohash}.vehicle.*.3430.0.',
+                  'emissioni': f'{geohash}.vehicle.*.3428.0.',
+                  }
 topics_bs = {
-    'posizione': f'{geohash_value}.{base_station_id}.3430.0.', 
-    'segnale': f'{geohash_value}.{base_station_id}.4.0.'
-}  
+     'latitudine' : f'{geohash}.bs.{base_station_id}.3430.0.',
+     'longitudine' : f'{geohash}.bs.{base_station_id}.3430.0.', 
+     'traffico': f'{geohash}.bs.{base_station_id}.3432.0.',
+     'emissioni' : f'{geohash}.bs.{base_station_id}.3428.0.'}  
+
 
 def on_message(channel, method_frame, header_frame, body):
     print(f"Ricevuto il messaggio con body {body.decode()} dal topic {method_frame.routing_key}")
@@ -106,15 +110,17 @@ try:
             "tmstp": timestamp, 
             "e": [{"n": "2", "v": str(longitudine)}]
         }
-        signal_msg = {
-            "tmstp": timestamp, 
-            "e": [{"n": "3", "v": str(random.randint(-120, -50))}]
-        }
-
+        traffic = random.randint (40,50)
+        traffic_message = {"tmstp" : timestamp ,"e": [{"n" : "1" , "v" : f"{traffic} " }] } 
+        emission = 10000*traffic
+        emission_message = {"tmstp" : timestamp ,"e": [{"n" : "17" , "v" : f"{emission} " }] }
+        
         messages = {
-            topics_bs['posizione']: latitude_msg,
-            topics_bs['posizione']: longitude_msg,
-            topics_bs['segnale']: signal_msg
+            topics_bs['latitudine']: latitude_msg,
+            topics_bs['longitudine']: longitude_msg,
+            topics_bs['traffico']: f"{traffic_message}",
+            topics_bs['emissioni']: f"{emission_message}"   # Valore dinamico
+            
         }
 
         # Pubblicazione dei messaggi
