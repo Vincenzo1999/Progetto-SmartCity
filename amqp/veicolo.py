@@ -72,8 +72,6 @@ try:
         new_vehicles = traci.simulation.getDepartedIDList()
         active_vehicles.update(new_vehicles)
 
-        
-
         if veicolo_id in list(active_vehicles):
             try:
                 x, y = traci.vehicle.getPosition(veicolo_id)
@@ -104,8 +102,8 @@ try:
                     if previous_geohash:
                         old_topics = {
                             'posizione': f'{previous_geohash}.bs.*.3430.0.',
-                                'traffico': f'{previous_geohash}.bs.*.3432.0.',
-                               'emissioni': f'{previous_geohash}.bs.*.3428.0.',
+                            'traffico': f'{previous_geohash}.bs.*.3432.0.',
+                            'emissioni': f'{previous_geohash}.bs.*.3428.0.',
                         }
                         for key, topic in old_topics.items():
                             unsubscribe_from_topic(channel, queues[key], topic)
@@ -113,8 +111,8 @@ try:
                     # Aggiorna e sottoscrivi ai topic relativi al nuovo geohash
                     new_topics = {
                         'posizione': f'{geohash_value}.bs.*.3430.0.',
-                            'traffico': f'{geohash_value}.bs.*.3432.0.',
-                            'emissioni': f'{geohash_value}.bs.*.3428.0.',
+                        'traffico': f'{geohash_value}.bs.*.3432.0.',
+                        'emissioni': f'{geohash_value}.bs.*.3428.0.',
                     }
                     for key, topic in new_topics.items():
                         channel.queue_bind(exchange='topic', queue=queues[key], routing_key=topic)
@@ -131,23 +129,24 @@ try:
                 
                 topics_veicolo = {
                     'latitudine': f'{geohash_value}.vehicle.{veicolo_id}.3430.0.',
-                  'longitudine': f'{geohash_value}.vehicle.{veicolo_id}.3430.0.',
-                  'velocità': f'{geohash_value}.vehicle.{veicolo_id}.3430.0.',
-                  'emissioni': f'{geohash_value}.vehicle.{veicolo_id}.3428.0.'
+                    'longitudine': f'{geohash_value}.vehicle.{veicolo_id}.3430.0.',
+                    'velocità': f'{geohash_value}.vehicle.{veicolo_id}.3430.0.',
+                    'emissioni': f'{geohash_value}.vehicle.{veicolo_id}.3428.0.'
                 }
 
-                messages = {
-                    topics_veicolo['latitudine']: str(latitudine), 
-                    topics_veicolo['longitudine']: str(longitudine),
-                    topics_veicolo['velocità']: str(speed),
-                    topics_veicolo['emissioni']: str(emission) 
-                }
+                # Sostituzione del dizionario con una tupla
+                messages = (
+                    (topics_veicolo['latitudine'], str(latitudine)),
+                    (topics_veicolo['longitudine'], str(longitudine)),
+                    (topics_veicolo['velocità'], str(speed)),
+                    (topics_veicolo['emissioni'], str(emission))
+                )
 
             except traci.exceptions.TraCIException as e:
                 print(f"Errore a step {step} con veicolo {veicolo_id}: {str(e)}")
 
-            # Pubblica i messaggi AMQP
-            for topic, message in messages.items():
+            # Pubblica i messaggi AMQP dalla tupla
+            for topic, message in messages:
                 channel.basic_publish(exchange='topic', routing_key=topic, body=message)
                 time.sleep(1)
                 print(f"Messaggio {topic}{message} inviato")

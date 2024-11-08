@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import traci
 import sumolib
 import traci.exceptions
+import json
 
 # Configurazione del broker MQTT
 broker = "mqtt-broker"
@@ -35,14 +36,14 @@ def on_connect(client, userdata, connect_flags, reason_code, properties):
 
 # Funzione per ricevere messaggi
 def on_message(client, userdata, message):
-    print(f"Messaggio  '{message.topic}''{message.payload.decode()}' ricevuto ")
+    print(f"Messaggio {message.topic} {message.payload.decode()} ricevuto")
 
 # Funzione per pubblicare messaggi
 def publish_messages(client, messages):
-    for topic, message in messages.items():
+    for topic, message in messages:
         result = client.publish(topic, message)
         if result.rc == mqtt_client.MQTT_ERR_SUCCESS:
-            print(f"Messaggio '{topic}''{message}' inviato ")
+            print(f"Messaggio {topic} {message} inviato")
             time.sleep(0.5)
         else:
             print(f"Errore nell'invio del messaggio al topic '{topic}'. Codice errore: {result.rc}")
@@ -76,7 +77,7 @@ def run():
             new_vehicles = traci.simulation.getDepartedIDList()
             active_vehicles.update(new_vehicles)
 
-            messages = {}
+            messages = []
 
             if veicolo_id in list(active_vehicles):
                 try:
@@ -87,50 +88,57 @@ def run():
 
                     # Controllo e aggiornamento della sottoscrizione in base al geohash
                     if geohash_value != previous_geohash:
-                        # Disiscrivi dal topic del geohash precedente, se esistente
                         if previous_geohash:
                             old_topics = {
-                                'posizione': f'{previous_geohash}/{veicolo_id}/3430/0/',
-                                'traffico': f'{previous_geohash}/{veicolo_id}/3432/0/'
+                                'latitudine': f'{previous_geohash}/bs/+/3430/0/',
+                                'longitudine': f'{previous_geohash}/bs/+/3430/0/',
+                                'traffico': f'{previous_geohash}/bs/+/3432/0/',
+                                'emissioni': f'{previous_geohash}/bs/+/3428/0/',
                             }
                             for topic in old_topics.values():
                                 veicolo.unsubscribe(topic)
                                 print(f"Disiscritto dal topic {topic}")
 
-                        # Aggiorna e sottoscrivi ai topic relativi al nuovo geohash
                         topics_bs = {
-                            'posizione': f'{geohash_value}/+/3430/0/',
-                            'traffico': f'{geohash_value}/+/3432/0/',
-                            'signal': f'{geohash_value}/+/4/0/'
+                            'latitudine': f'{geohash_value}/bs/+/3430/0/',
+                            'longitudine': f'{geohash_value}/bs/+/3430/0/',
+                            'traffico': f'{geohash_value}/bs/+/3432/0/',
+                            'emissioni': f'{geohash_value}/bs/+/3428/0/',
                         }
                         for topic in topics_bs.values():
                             veicolo.subscribe(topic)
                             print(f"Sottoscritto al topic {topic}")
 
-                        previous_geohash = geohash_value  # Aggiorna il geohash precedente
-                    topics_veicolo = {'latitudine': f'{geohash_value}/{veicolo_id}/3430/0/',
-                  'longitudine': f'{geohash_value}/{veicolo_id}/3430/0/',
-                  'velocità': f'{geohash_value}/{veicolo_id}/3430/0/',
-                  'traffico': f'{geohash_value}/{veicolo_id}/3432/0/'}
+                        previous_geohash = geohash_value
+
+                    topics_veicolo = {
+                        'latitudine': f'{geohash_value}/vehicle/{veicolo_id}/3430/0/',
+                        'longitudine': f'{geohash_value}/vehicle/{veicolo_id}/3430/0/',
+                        'velocità': f'{geohash_value}/vehicle/{veicolo_id}/3430/0/',
+                        'emissioni': f'{geohash_value}/vehicle/{veicolo_id}/3428/0/'
+                    }
+
                     # Genera i messaggi per il nuovo geohash
                     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                    longitudine = {"tmstp" : timestamp ,"e": [{"n" : "2" , "v" : f"{lon} " }] }
-                    latitudine = {"tmstp" : timestamp ,"e": [{"n" : "1" , "v" : f"{lat} " }] }
-                    speed = {"tmstp" : timestamp ,"e": [{"n" : "4" , "v" : f"{traci.vehicle.getSpeed(veicolo_id)} " }] }
-                    traffic = {"tmstp" : timestamp ,"e": [{"n" : "1" , "v" : f"{traci.vehicle.getIDCount()} " }] }
-                    messages = {
-        topics_veicolo['latitudine']: f"{latitudine}", 
-        topics_veicolo['longitudine']: f"{longitudine}",
-        topics_veicolo['velocità']: f"{speed}",    
-        topics_veicolo['traffico']: f"{traffic}",  # Valore dinamico
-                 }
+                    longitude = {"tmstp": timestamp, "e": [{"n": "2", "v": f"{lon}"}]}
+                    latitude = {"tmstp": timestamp, "e": [{"n": "1", "v": f"{lat}"}]}
+                    speed = {"tmstp": timestamp, "e": [{"n": "4", "v": f"{traci.vehicle.getSpeed(veicolo_id)}"}]}
+                    emission = {"tmstp": timestamp, "e": [{"n": "17", "v": f"{traci.vehicle.getCO2Emission(veicolo_id)}"}]}
+                    
+                    messages = [
+                        (topics_veicolo['latitudine'], json.dumps(latitude)),
+                        (topics_veicolo['longitudine'], json.dumps(longitude)),
+                        (topics_veicolo['velocità'], json.dumps(speed)),
+                        (topics_veicolo['emissioni'], json.dumps(emission)),
+                    ]
+
                 except traci.exceptions.TraCIException as e:
                     print(f"Errore a step {step} con veicolo {veicolo_id}: {str(e)}")
 
-            publish_messages(veicolo, messages)  # Pubblica i messaggi dopo la raccolta
+            publish_messages(veicolo, messages)
 
             step += 1
-            time.sleep(0.5)  # Mantieni una pausa per rallentare la simulazione
+            time.sleep(0.5)
 
         traci.close()
 
