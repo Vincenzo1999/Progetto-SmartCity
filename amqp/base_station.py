@@ -115,16 +115,16 @@ try:
         emission = 10000*traffic
         emission_message = {"tmstp" : timestamp ,"e": [{"n" : "17" , "v" : f"{emission} " }] }
         
-        messages = {
-            topics_bs['latitudine']: latitude_msg,
-            topics_bs['longitudine']: longitude_msg,
-            topics_bs['traffico']: f"{traffic_message}",
-            topics_bs['emissioni']: f"{emission_message}"   # Valore dinamico
+        messages = (
+            (topics_bs['latitudine'], latitude_msg),
+            (topics_bs['longitudine'], longitude_msg),
+            (topics_bs['traffico'], f"{traffic_message}"),
+            (topics_bs['emissioni'], f"{emission_message}")   # Valore dinamico
             
-        }
+        )
 
         # Pubblicazione dei messaggi
-        for topic, message in messages.items():
+        for topic, message in messages:
             channel.basic_publish(exchange='topic', routing_key=topic, body=str(message))
             print(f"Messaggio inviato al topic {topic}: {message}")
         
