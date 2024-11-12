@@ -119,6 +119,7 @@ def publish(client):
         # Controllo se il messaggio è stato pubblicato con successo
         if result.rc == mqtt_client.MQTT_ERR_SUCCESS:
             print(f"Messaggio {topic} {message} inviato")
+            time.sleep(0.5)
         else:
             print(f"Errore nell'invio del messaggio al topic '{topic}'. Codice errore: {result.rc}")
 

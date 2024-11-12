@@ -1,3 +1,0 @@
-from geolib import geohash
-geo = geohash.encode("38.09005287586328", "15.637112452256785",6)
-print(geo)
